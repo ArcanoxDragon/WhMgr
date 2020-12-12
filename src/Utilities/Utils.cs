@@ -42,7 +42,8 @@
 
             var url = string.Format(staticMapUrl, latitude, longitude, staticMapZoom);
             //var markerUrl = staticMap.Markers.Count > 0 ? url + "?markers=" + Uri.EscapeDataString(JsonConvert.SerializeObject(staticMap.Markers)) : string.Empty;
-            var markerUrl = staticMap.Markers.Count > 0 ? url + "?markers=" + JsonConvert.SerializeObject(staticMap.Markers) : string.Empty;
+            var queryJoiner = url.Contains('?') ? "&" : "?";
+            var markerUrl = staticMap.Markers.Count > 0 ? url + queryJoiner + "markers=" + JsonConvert.SerializeObject(staticMap.Markers) : string.Empty;
 
             if (feature != null)
             {
