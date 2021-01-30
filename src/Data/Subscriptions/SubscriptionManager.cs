@@ -93,13 +93,15 @@
 
             try
             {
-                using var conn = GetConnection();
-                var where = conn?
-                    .From<SubscriptionObject>()
-                    .Where(x => x.GuildId == guildId && x.UserId == userId);
-                var query = conn?.LoadSelect(where);
-                var sub = query?.FirstOrDefault();
-                return sub ?? new SubscriptionObject { UserId = userId, GuildId = guildId };
+                using (var conn = GetConnection())
+                {
+                    var where = conn?
+                                .From<SubscriptionObject>()
+                                .Where(x => x.GuildId == guildId && x.UserId == userId);
+                    var query = conn?.LoadSelect(where);
+                    var sub = query?.FirstOrDefault();
+                    return sub ?? new SubscriptionObject { UserId = userId, GuildId = guildId };
+                }
             }
             catch (MySql.Data.MySqlClient.MySqlException ex)
             {
@@ -210,14 +212,16 @@
                     throw new Exception("Not connected to database.");
                 }
 
-                using var conn = GetConnection();
-                var where = conn?
-                    .From<SubscriptionObject>()?
-                    .Where(x => x.Enabled);
-                var results = conn?
-                    .LoadSelect(where)?
-                    .ToList();
-                return results;
+                using (var conn = GetConnection())
+                {
+                    var where = conn?
+                        .From<SubscriptionObject>()?
+                        .Where(x => x.Enabled);
+                    var results = conn?
+                        .LoadSelect(where)?
+                        .ToList();
+                    return results;
+                }
             }
             catch (OutOfMemoryException mex)
             {
