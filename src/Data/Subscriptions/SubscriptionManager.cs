@@ -93,7 +93,7 @@
 
             try
             {
-                var conn = GetConnection();
+                using var conn = GetConnection();
                 var where = conn?
                     .From<SubscriptionObject>()
                     .Where(x => x.GuildId == guildId && x.UserId == userId);
@@ -210,7 +210,7 @@
                     throw new Exception("Not connected to database.");
                 }
 
-                var conn = GetConnection();
+                using var conn = GetConnection();
                 var where = conn?
                     .From<SubscriptionObject>()?
                     .Where(x => x.Enabled);
