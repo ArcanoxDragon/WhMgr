@@ -487,7 +487,6 @@ namespace WhMgr.Data.Subscriptions
 
         public async Task ProcessQuestSubscription(QuestData quest)
         {
-            var reward = quest.Rewards.FirstOrDefault().Info;
             var rewardKeyword = quest.GetReward();
             var questName = quest.GetQuestMessage();
 
@@ -505,10 +504,10 @@ namespace WhMgr.Data.Subscriptions
                 return geofence;
             }
 
-            var subscriptions = Manager.GetUserSubscriptions();
+            var subscriptions = Manager.GetUserSubscriptionsByQuestReward(rewardKeyword);
             if (subscriptions == null)
             {
-                _logger.Warn($"Failed to get subscriptions from database table.");
+                _logger.Warn($"Failed to get subscriptions from subscription cache.");
                 return;
             }
 

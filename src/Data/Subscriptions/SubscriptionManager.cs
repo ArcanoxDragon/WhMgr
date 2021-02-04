@@ -1,4 +1,6 @@
-﻿namespace WhMgr.Data.Subscriptions
+﻿using System.Threading;
+
+namespace WhMgr.Data.Subscriptions
 {
     using System;
     using System.Collections.Generic;
@@ -67,11 +69,16 @@
             _connFactory = new OrmLiteConnectionFactory(_whConfig.Instance.Database.Main.ToString(), MySqlDialect.Provider);
 
             // Reload subscriptions every 60 seconds to account for UI changes
-            _reloadTimer = new Timer(_whConfig.Instance.ReloadSubscriptionChangesMinutes * 60 * 1000);
+            var subReloadMinutes = _whConfig.Instance.ReloadSubscriptionChangesMinutes;
+
+            _logger.Debug($"SubscriptionManager will reload subscriptions every {subReloadMinutes} minutes");
+            _reloadTimer = new Timer(subReloadMinutes * 60 * 1000);
             _reloadTimer.Elapsed += (sender, e) => ReloadSubscriptions();
             _reloadTimer.Start();
 
+            _logger.Debug("Running initial subscription reload...");
             ReloadSubscriptions();
+            _logger.Debug("Done running initial subscription reload.");
         }
 
         #endregion
@@ -79,12 +86,22 @@
         #region User
 
         /// <summary>
-        /// Get user subscription from guild id and user id
+        /// Load user subscription from database by guild id and user id
         /// </summary>
         /// <param name="guildId">Discord guild id to lookup</param>
         /// <param name="userId">Discord user id to lookup</param>
         /// <returns>Returns user subscription object</returns>
-        public SubscriptionObject GetUserSubscriptions(ulong guildId, ulong userId)
+        private SubscriptionObject LoadUserSubscriptions(ulong guildId, ulong userId)
+            => LoadUserSubscriptions(guildId, userId, true);
+
+        /// <summary>
+        /// Load user subscription from database by guild id and user id
+        /// </summary>
+        /// <param name="guildId">Discord guild id to lookup</param>
+        /// <param name="userId">Discord user id to lookup</param>
+        /// <param name="retry">Whether or not to retry loading subscriptions when a MySql exception occurs</param>
+        /// <returns>Returns user subscription object</returns>
+        private SubscriptionObject LoadUserSubscriptions(ulong guildId, ulong userId, bool retry)
         {
             if (!IsDbConnectionOpen())
             {
@@ -106,9 +123,22 @@
             catch (MySql.Data.MySqlClient.MySqlException ex)
             {
                 _logger.Error(ex);
-                return GetUserSubscriptions(guildId, userId);
+
+                if (retry)
+                    return LoadUserSubscriptions(guildId, userId, false);
+
+                return new SubscriptionObject { UserId = userId, GuildId = guildId };
             }
         }
+
+        /// <summary>
+        /// Get user subscription from guild id and user id
+        /// </summary>
+        /// <param name="guildId">Discord guild id to lookup</param>
+        /// <param name="userId">Discord user id to lookup</param>
+        /// <returns>Returns user subscription object</returns>
+        public SubscriptionObject GetUserSubscriptions(ulong guildId, ulong userId)
+            => _subscriptions?.FirstOrDefault(s => s.GuildId == guildId && s.UserId == userId);
 
         /// <summary>
         /// Get user subscriptions from subscribed Pokemon id
@@ -203,7 +233,7 @@
         /// Get all enabled user subscriptions
         /// </summary>
         /// <returns>Returns all enabled user subscription objects</returns>
-        public List<SubscriptionObject> GetUserSubscriptions()
+        private List<SubscriptionObject> LoadUserSubscriptions()
         {
             try
             {
@@ -212,15 +242,24 @@
                     throw new Exception("Not connected to database.");
                 }
 
-                using (var conn = GetConnection())
+                try
                 {
-                    var where = conn?
-                        .From<SubscriptionObject>()?
-                        .Where(x => x.Enabled);
-                    var results = conn?
-                        .LoadSelect(where)?
-                        .ToList();
-                    return results;
+                    _logger.Debug($"Thread {Thread.CurrentThread.ManagedThreadId} is loading user subscriptions from the database");
+
+                    using (var conn = GetConnection())
+                    {
+                        var where = conn?
+                            .From<SubscriptionObject>()?
+                            .Where(x => x.Enabled);
+                        var results = conn?
+                            .LoadSelect(where)?
+                            .ToList();
+                        return results;
+                    }
+                }
+                finally
+                {
+                    _logger.Debug($"Thread {Thread.CurrentThread.ManagedThreadId} finished loading user subscriptions from the database");
                 }
             }
             catch (OutOfMemoryException mex)
@@ -244,7 +283,8 @@
         {
             // TODO: Only reload based on last_changed timestamp in metadata table
 
-            var subs = GetUserSubscriptions();
+            var subs = LoadUserSubscriptions();
+
             if (subs == null)
                 return;
 
